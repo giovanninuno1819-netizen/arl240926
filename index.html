@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Equipos - Sistema de Seguimiento</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Vue.js 3 CDN -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        [v-cloak] { display: none; }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800 antialiased">
+
+<div id="app" v-cloak class="min-h-screen flex flex-col md:flex-row">
+
+    <!-- LOGIN SCREEN -->
+    <div v-if="!isLoggedIn" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900 bg-opacity-80 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-200">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-blue-100 text-blue-600 rounded-full mb-3">
+                    <i data-lucide="settings" class="w-8 h-8"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-800">CONTROL DE EQUIPOS</h1>
+                <p class="text-sm text-slate-500 mt-1">Sistema de seguimiento e instalación</p>
+            </div>
+            <form @submit.prevent="login" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Usuario</label>
+                    <input type="text" v-model="loginForm.user" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Ingresa tu usuario">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>
+                    <input type="password" v-model="loginForm.pass" required class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="••••••••">
+                </div>
+                <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+                    <i data-lucide="log-in" class="w-5 h-5"></i>
+                    INICIAR SESIÓN
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP STRUCTURE -->
+    <template v-else>
+        <!-- SIDEBAR -->
+        <aside class="w-full md:w-64 bg-slate-900 text-slate-300 flex flex-col shrink-0">
+            <div class="p-6 border-b border-slate-800 flex items-center gap-3">
+                <div class="p-2 bg-blue-600 text-white rounded-lg">
+                    <i data-lucide="cog" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h2 class="font-bold text-white leading-tight">CONTROL EQUIPOS</h2>
+                    <span class="text-xs text-slate-400">v2.5 Dashboard</span>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 bg-slate-800/50 border-b border-slate-800 flex items-center gap-3">
+                <div class="w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center text-xs">
+                    {{ currentUser.substring(0,2).toUpperCase() }}
+                </div>
+                <div class="truncate">
+                    <p class="text-xs text-slate-400">Usuario activo:</p>
+                    <p class="text-sm font-semibold text-white truncate">{{ currentUser }}</p>
+                </div>
+            </div>
+
+            <nav class="flex-1 p-4 space-y-1">
+                <button v-for="item in navItems" :key="item.id" @click="currentTab = item.id"
+                    :class="[currentTab === item.id ? 'bg-blue-600 text-white font-medium' : 'hover:bg-slate-800 text-slate-400 hover:text-white', 'w-full flex items-center gap-3 px-4 py-3 rounded-xl transition text-sm']">
+                    <i :data-lucide="item.icon" class="w-5 h-5"></i>
+                    {{ item.label }}
+                </button>
+            </nav>
+
+            <div class="p-4 border-t border-slate-800">
+                <button @click="logout" class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 hover:bg-red-600/20 hover:text-red-400 text-slate-400 rounded-lg transition text-sm">
+                    <i data-lucide="log-out" class="w-4 h-4"></i>
+                    Cerrar sesión
+                </button>
+            </div>
+        </aside>
+
+        <!-- TOAST NOTIFICATION -->
+        <div v-if="toastMessage" class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-slate-700">
+            <i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>
+            <span class="text-sm font-medium">{{ toastMessage }}</span>
+        </div>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10">
+
+            <!-- DASHBOARD TAB -->
+            <div v-if="currentTab === 'Inicio'" class="space-y-8">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-slate-900">Dashboard General</h1>
+                    <p class="text-slate-500 mt-1">Selecciona una zona de operación para gestionar equipos o revisa el estado global.</p>
+                </div>
+
+                <!-- Zonas Selection -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div v-for="(procesos, zona) in catalogo" :key="zona" 
+                        @click="selectZonaFromDashboard(zona)"
+                        class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition cursor-pointer group flex justify-between items-center">
+                        <div>
+                            <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Zona de Operación</span>
+                            <h3 class="text-2xl font-bold text-slate-800 group-hover:text-blue-600 transition mt-1">{{ zona }}</h3>
+                            <p class="text-sm text-slate-500 mt-2">{{ Object.keys(procesos).length }} Áreas/Procesos registrados</p>
+                        </div>
+                        <div class="p-4 bg-slate-50 group-hover:bg-blue-50 text-slate-400 group-hover:text-blue-600 rounded-2xl transition">
+                            <i data-lucide="arrow-right" class="w-6 h-6"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Metrics -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-semibold text-slate-400 uppercase">Total Equipos Registrados</p>
+                        <h4 class="text-3xl font-extrabold text-slate-800 mt-2">{{ equipos.length }}</h4>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-semibold text-emerald-600 uppercase">Equipos Firmados</p>
+                        <h4 class="text-3xl font-extrabold text-emerald-600 mt-2">{{ firmadosCount }}</h4>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-semibold text-amber-500 uppercase">Pendientes de Firma</p>
+                        <h4 class="text-3xl font-extrabold text-amber-500 mt-2">{{ equipos.length - firmadosCount }}</h4>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <p class="text-xs font-semibold text-blue-600 uppercase">Zonas Disponibles</p>
+                        <h4 class="text-3xl font-extrabold text-slate-800 mt-2">{{ Object.keys(catalogo).length }}</h4>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EQUIPOS SELECTION TAB -->
+            <div v-if="currentTab === 'Equipos'" class="space-y-8">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h1 class="text-3xl font-extrabold text-slate-900">Seguimiento de Equipos</h1>
+                        <p class="text-slate-500 mt-1">Explora por zona y proceso los equipos del catálogo.</p>
+                    </div>
+                    <div class="w-full sm:w-auto">
+                        <select v-model="selectedZona" @change="updateFirstProceso" class="px-4 py-2.5 bg-white border border-slate-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option v-for="(val, key) in catalogo" :key="key" :value="key">Zona: {{ key }}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Proceso selector -->
+                <div v-if="selectedZona && catalogo[selectedZona] && Object.keys(catalogo[selectedZona]).length > 0" class="space-y-6">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200">
+                        <label class="block text-xs font-bold text-slate-400 uppercase mb-2">1. Seleccionar Proceso / Área</label>
+                        <select v-model="selectedProceso" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+                            <option v-for="(eqList, proc) in catalogo[selectedZona]" :key="proc" :value="proc">{{ proc }}</option>
+                        </select>
+                    </div>
+
+                    <div v-if="selectedProceso">
+                        <h3 class="text-xl font-bold text-slate-800 mb-4">2. Equipos de {{ selectedProceso }}</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <div v-for="eqName in catalogo[selectedZona][selectedProceso]" :key="eqName" 
+                                class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between space-y-4 hover:border-blue-400 transition">
+                                <div>
+                                    <span class="inline-block px-2.5 py-1 text-xs font-semibold bg-blue-50 text-blue-600 rounded-md mb-2">{{ selectedZona }}</span>
+                                    <h4 class="text-lg font-bold text-slate-800">{{ eqName }}</h4>
+                                    <p class="text-xs text-slate-400 mt-1">Área: {{ selectedProceso }}</p>
+                                </div>
+                                <button @click="openEquipment(selectedZona, selectedProceso, eqName)" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-sm transition flex items-center justify-center gap-2">
+                                    ABRIR EQUIPO
+                                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DETALLE EQUIPO TAB -->
+            <div v-if="currentTab === 'Detalle' && activeEquipment" class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <button @click="currentTab = 'Equipos'" class="px-4 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-50 transition flex items-center gap-2">
+                        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                        Regresar a Lista
+                    </button>
+                    <span v-if="activeEquipment.firmado" class="px-3 py-1 bg-emerald-100 text-emerald-700 font-bold rounded-full text-xs flex items-center gap-1">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i> Firmado y Liberado
+                    </span>
+                </div>
+
+                <div>
+                    <h1 class="text-3xl font-extrabold text-slate-900">{{ activeEquipment.equipo }}</h1>
+                    <p class="text-sm text-slate-500 mt-1">{{ activeEquipment.zona }} &rsaquo; {{ activeEquipment.proceso }} &rsaquo; {{ activeEquipment.equipo }}</p>
+                </div>
+
+                <!-- Tabs header -->
+                <div class="flex border-b border-slate-200 overflow-x-auto custom-scrollbar gap-2">
+                    <button v-for="tab in detailTabs" :key="tab" @click="activeDetailTab = tab"
+                        :class="[activeDetailTab === tab ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-slate-500 hover:text-slate-700', 'px-4 py-3 border-b-2 text-sm whitespace-nowrap transition']">
+                        {{ tab }}
+                    </button>
+                </div>
+
+                <!-- Sub-Tab 1: Características -->
+                <div v-if="activeDetailTab === 'Características'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm max-w-4xl">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Características Principales</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Marca</label>
+                            <input type="text" v-model="activeEquipment.marca" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Modelo</label>
+                            <input type="text" v-model="activeEquipment.modelo" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Capacidad</label>
+                            <input type="text" v-model="activeEquipment.capacidad" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Dimensiones</label>
+                            <input type="text" v-model="activeEquipment.dimensiones" class="w-full px-3 py-2 border rounded-lg text-sm">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Servicios Requeridos</label>
+                            <textarea v-model="activeEquipment.servicios" rows="3" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
+                        </div>
+                    </div>
+                    <button @click="showNotification('Características guardadas correctamente')" class="mt-4 px-6 py-2.5 bg-blue-600 text-white font-medium rounded-xl text-sm hover:bg-blue-700 transition">
+                        GUARDAR CARACTERÍSTICAS
+                    </button>
+                </div>
+
+                <!-- Sub-Tab 2: Certificados & Documentación -->
+                <div v-if="['Certificados', 'Documentación'].includes(activeDetailTab)" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm max-w-4xl space-y-4">
+                    <h3 class="text-lg font-bold text-slate-800 mb-2">{{ activeDetailTab }} Requeridos</h3>
+                    <div v-for="req in requisitos[activeDetailTab]" :key="req" class="p-4 bg-slate-50 border rounded-xl flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                        <span class="font-medium text-sm text-slate-700">{{ req }}</span>
+                        <input type="file" @change="showNotification(req + ' adjuntado con éxito')" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    </div>
+                </div>
+
+                <!-- Sub-Tab 3: Ubicación -->
+                <div v-if="activeDetailTab === 'Ubicación'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm max-w-4xl space-y-4">
+                    <h3 class="text-lg font-bold text-slate-800 mb-4">Ubicación Física / Plano</h3>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Ubicación Exacta</label>
+                        <input type="text" v-model="activeEquipment.ubicacion" class="w-full px-3 py-2 border rounded-lg text-sm" placeholder="Ej: Sala Limpia A-102">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Cargar Plano CAD / Imagen</label>
+                        <input type="file" @change="showNotification('Plano actualizado correctamente')" class="w-full text-xs text-slate-500 border p-2 rounded-lg">
+                    </div>
+                    <button @click="showNotification('Ubicación guardada')" class="mt-2 px-6 py-2 bg-blue-600 text-white font-medium rounded-xl text-sm">GUARDAR UBICACIÓN</button>
+                </div>
+
+                <!-- Sub-Tab 4: Evaluación -->
+                <div v-if="activeDetailTab === 'Evaluación'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                    <h3 class="text-lg font-bold text-slate-800">Evaluación de Cumplimiento</h3>
+                    
+                    <div v-for="(reqs, cat) in requisitos" :key="cat" class="space-y-3">
+                        <h4 class="font-bold text-slate-700 border-b pb-1 text-sm">{{ cat }}</h4>
+                        <div v-for="req in reqs" :key="req" class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 bg-slate-50 rounded-xl gap-2">
+                            <span class="text-sm font-medium text-slate-800">{{ req }}</span>
+                            <div class="flex items-center gap-3">
+                                <label v-for="st in ['Cumple', 'No cumple', 'Pendiente']" :key="st" class="inline-flex items-center gap-1 text-xs">
+                                    <input type="radio" :name="cat + req" :value="st" v-model="activeEquipment.evaluaciones[cat + '::' + req]" class="text-blue-600">
+                                    {{ st }}
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="p-4 bg-slate-100 rounded-xl space-y-2">
+                        <div class="flex justify-between text-sm font-bold">
+                            <span>Cumplimiento Total: {{ getCompliancePercentage(activeEquipment) }}%</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-3 overflow-hidden">
+                            <div class="bg-blue-600 h-3 transition-all duration-300" :style="{ width: getCompliancePercentage(activeEquipment) + '%' }"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-Tab 5: Gantt -->
+                <div v-if="activeDetailTab === 'Gantt'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                    <h3 class="text-lg font-bold text-slate-800">Plan de Instalación</h3>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
+                                <tr>
+                                    <th class="p-3">Actividad</th>
+                                    <th class="p-3">Inicio</th>
+                                    <th class="p-3">Fin</th>
+                                    <th class="p-3">Responsable</th>
+                                    <th class="p-3">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y">
+                                <tr v-for="act in activeEquipment.gantt" :key="act.id">
+                                    <td class="p-3 font-semibold">{{ act.actividad }}</td>
+                                    <td class="p-3 text-slate-500">{{ act.inicio }}</td>
+                                    <td class="p-3 text-slate-500">{{ act.fin }}</td>
+                                    <td class="p-3 text-slate-600">{{ act.responsable }}</td>
+                                    <td class="p-3">
+                                        <span :class="{'bg-emerald-100 text-emerald-700': act.estado === 'Completado', 'bg-amber-100 text-amber-700': act.estado === 'En proceso', 'bg-slate-100 text-slate-600': act.estado === 'Pendiente'}" class="px-2.5 py-1 rounded-full text-xs font-bold">
+                                            {{ act.estado }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Add Activity Form -->
+                    <form @submit.prevent="addGanttActivity" class="p-4 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                        <input type="text" v-model="newActivity.actividad" placeholder="Nueva actividad" required class="px-3 py-2 border rounded-lg text-xs md:col-span-1">
+                        <input type="date" v-model="newActivity.inicio" required class="px-3 py-2 border rounded-lg text-xs">
+                        <input type="date" v-model="newActivity.fin" required class="px-3 py-2 border rounded-lg text-xs">
+                        <select v-model="newActivity.responsable" class="px-3 py-2 border rounded-lg text-xs">
+                            <option v-for="u in usuarios" :key="u" :value="u">{{ u }}</option>
+                        </select>
+                        <button type="submit" class="bg-blue-600 text-white font-bold rounded-lg text-xs py-2 hover:bg-blue-700 transition">
+                            AGREGAR
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Sub-Tab 6: Firma -->
+                <div v-if="activeDetailTab === 'Firma'" class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm max-w-xl space-y-6">
+                    <h3 class="text-lg font-bold text-slate-800">Liberación y Firma Digital</h3>
+
+                    <div v-if="getCompliancePercentage(activeEquipment) === 100" class="space-y-4">
+                        <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-sm font-semibold flex items-center gap-2">
+                            <i data-lucide="check-circle" class="w-5 h-5"></i>
+                            Requisitos completados al 100%. Equipo listo para firmar.
+                        </div>
+
+                        <div v-if="!activeEquipment.firmado" class="space-y-3">
+                            <label class="block text-xs font-bold text-slate-600">Seleccionar Firmante Responsable</label>
+                            <select v-model="selectedFirmante" class="w-full px-4 py-2 border rounded-xl text-sm">
+                                <option v-for="u in usuarios" :key="u" :value="u">{{ u }}</option>
+                            </select>
+                            <button @click="signEquipment" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm transition">
+                                FIRMAR Y LIBERAR EQUIPO
+                            </button>
+                        </div>
+                        <div v-else class="p-4 bg-slate-50 border rounded-xl text-center space-y-1">
+                            <p class="text-xs text-slate-400">Firmado por:</p>
+                            <p class="font-bold text-slate-800 text-base">{{ activeEquipment.firmante }}</p>
+                            <p class="text-xs text-slate-500">Fecha: {{ activeEquipment.fechaFirma }}</p>
+                        </div>
+                    </div>
+
+                    <div v-else class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm font-semibold flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+                        Firma bloqueada. Completa el 100% de la evaluación de requisitos.
+                    </div>
+                </div>
+            </div>
+
+            <!-- GANTT GENERAL TAB -->
+            <div v-if="currentTab === 'Gantt'" class="space-y-6">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-slate-900">Gantt General de Instalaciones</h1>
+                    <p class="text-slate-500 mt-1">Vista consolidada de actividades programadas para todos los equipos.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-slate-500 uppercase text-xs">
+                            <tr>
+                                <th class="p-3">Equipo</th>
+                                <th class="p-3">Zona / Proceso</th>
+                                <th class="p-3">Actividad</th>
+                                <th class="p-3">Fechas</th>
+                                <th class="p-3">Responsable</th>
+                                <th class="p-3">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y">
+                            <template v-for="eq in equipos" :key="eq.id">
+                                <tr v-for="g in eq.gantt" :key="g.id">
+                                    <td class="p-3 font-bold text-slate-800">{{ eq.equipo }}</td>
+                                    <td class="p-3 text-xs text-slate-500">{{ eq.zona }} &rsaquo; {{ eq.proceso }}</td>
+                                    <td class="p-3 font-medium">{{ g.actividad }}</td>
+                                    <td class="p-3 text-xs text-slate-500">{{ g.inicio }} / {{ g.fin }}</td>
+                                    <td class="p-3 text-slate-600">{{ g.responsable }}</td>
+                                    <td class="p-3">
+                                        <span :class="{'bg-emerald-100 text-emerald-700': g.estado === 'Completado', 'bg-amber-100 text-amber-700': g.estado === 'En proceso', 'bg-slate-100 text-slate-600': g.estado === 'Pendiente'}" class="px-2.5 py-1 rounded-full text-xs font-bold">
+                                            {{ g.estado }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- USUARIOS TAB -->
+            <div v-if="currentTab === 'Usuarios'" class="space-y-6 max-w-2xl">
+                <div>
+                    <h1 class="text-3xl font-extrabold text-slate-900">Catálogo de Usuarios</h1>
+                    <p class="text-slate-500 mt-1">Administra el personal disponible para responsabilidades y firmas.</p>
+                </div>
+
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <div class="divide-y">
+                        <div v-for="u in usuarios" :key="u" class="py-3 flex justify-between items-center">
+                            <span class="font-medium text-slate-800">{{ u }}</span>
+                            <span class="text-xs px-2.5 py-1 bg-slate-100 text-slate-600 font-semibold rounded-full">Activo</span>
+                        </div>
+                    </div>
+
+                    <form @submit.prevent="addUser" class="pt-4 border-t flex gap-2">
+                        <input type="text" v-model="newUserName" placeholder="Nombre completo o departamento" required class="flex-1 px-4 py-2 border rounded-xl text-sm">
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white font-bold rounded-xl text-sm hover:bg-blue-700 transition">
+                            AGREGAR
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        </main>
+    </template>
+
+</div>
+
+<script>
+    const { createApp, ref, computed } = Vue;
+
+    createApp({
+        setup() {
+            const isLoggedIn = ref(false);
+            const currentUser = ref('Alberto Giovanni Bañales Nuño');
+            const loginForm = ref({ user: '', pass: '' });
+            const currentTab = ref('Inicio');
+            const toastMessage = ref('');
+            
+            const selectedZona = ref('Oncológicos');
+            const selectedProceso = ref('LAVADO');
+            const activeEquipment = ref(null);
+            const activeDetailTab = ref('Características');
+            
+            const newUserName = ref('');
+            const selectedFirmante = ref('Alberto Giovanni Bañales Nuño');
+            const newActivity = ref({ actividad: '', inicio: '', fin: '', responsable: 'Alberto Giovanni Bañales Nuño', estado: 'Pendiente' });
+
+            const navItems = [
+                { id: 'Inicio', label: 'Inicio', icon: 'home' },
+                { id: 'Equipos', label: 'Equipos', icon: 'grid' },
+                { id: 'Gantt', label: 'Gantt General', icon: 'calendar' },
+                { id: 'Usuarios', label: 'Usuarios', icon: 'users' }
+            ];
+
+            const detailTabs = ['Características', 'Certificados', 'Documentación', 'Ubicación', 'Evaluación', 'Gantt', 'Firma'];
+
+            const catalogo = ref({
+                "Oncológicos": {
+                    "LAVADO": ["Lavadora", "Túnel de despirogenizado"],
+                    "LLENADO": ["Mesa de acumulación", "Llenadora", "Sistema de carga y descarga"],
+                    "LIOFILIZADO": ["Liofilizador", "CIP externo"],
+                    "ENGARGOLADO": ["Engargoladora", "Mesa de acumulación"],
+                    "LAVADO DE EXTERIORES": ["Lavadora de exteriores", "Mesa de acumulación"],
+                    "INSPECCIÓN": ["Revisadora óptica", "Revisadora de hermeticidad"],
+                    "ACONDICIONAMIENTO": ["Etiquetadora", "Blíster", "Encartonadora"],
+                    "AISLADORES": ["Llenado", "Liofilizado", "Engargolado", "Lavado de exteriores"]
+                },
+                "Convencional": {
+                    "MEZCLADO": ["Tanque Agitador", "Molino Industrial"]
+                }
+            });
+
+            const requisitos = ref({
+                "Características": ["Marca", "Modelo", "Capacidad", "Servicios", "Dimensiones"],
+                "Certificados": ["Certificado de materiales", "Certificado de calibración", "Certificados del constructor"],
+                "Documentación": ["IQ", "OQ", "Manual de instalación", "Manual de operación", "Manual de pantallas", "Manual de mantenimiento"],
+                "Ubicación": ["Plano / ubicación del equipo"]
+            });
+
+            const usuarios = ref([
+                "Alberto Giovanni Bañales Nuño",
+                "Ingeniería",
+                "Calidad",
+                "Producción",
+                "Mantenimiento"
+            ]);
+
+            const equipos = ref([]);
+
+            Object.keys(catalogo.value).forEach(zona => {
+                Object.keys(catalogo.value[zona]).forEach(proceso => {
+                    catalogo.value[zona][proceso].forEach(eqName => {
+                        equipos.value.push({
+                            id: Math.random(),
+                            zona: zona,
+                            proceso: proceso,
+                            equipo: eqName,
+                            marca: '',
+                            modelo: '',
+                            capacidad: '',
+                            dimensiones: '',
+                            servicios: '',
+                            ubicacion: '',
+                            evaluaciones: {},
+                            gantt: [
+                                { id: 1, actividad: 'Instalación mecánica', inicio: '2026-06-01', fin: '2026-06-05', responsable: 'Ingeniería', estado: 'Pendiente' }
+                            ],
+                            firmado: false,
+                            firmante: '',
+                            fechaFirma: ''
+                        });
+                    });
+                });
+            });
+
+            const firmadosCount = computed(() => equipos.value.filter(e => e.firmado).length);
+
+            const login = () => {
+                if (loginForm.value.user && loginForm.value.pass) {
+                    isLoggedIn.value = true;
+                    showNotification('Sesión iniciada correctamente');
+                }
+            };
+
+            const logout = () => {
+                isLoggedIn.value = false;
+                loginForm.value = { user: '', pass: '' };
+            };
+
+            const showNotification = (msg) => {
+                toastMessage.value = msg;
+                setTimeout(() => { toastMessage.value = ''; }, 3000);
+            };
+
+            const selectZonaFromDashboard = (zona) => {
+                selectedZona.value = zona;
+                updateFirstProceso();
+                currentTab.value = 'Equipos';
+            };
+
+            const updateFirstProceso = () => {
+                const procesos = Object.keys(catalogo.value[selectedZona.value] || {});
+                if (procesos.length > 0) {
+                    selectedProceso.value = procesos[0];
+                }
+            };
+
+            const openEquipment = (zona, proceso, eqName) => {
+                let found = equipos.value.find(e => e.zona === zona && e.proceso === proceso && e.equipo === eqName);
+                if (found) {
+                    activeEquipment.value = found;
+                    currentTab.value = 'Detalle';
+                    activeDetailTab.value = 'Características';
+                }
+            };
+
+            const getCompliancePercentage = (eq) => {
+                let totalReqs = 0;
+                let fulfilled = 0;
+                Object.keys(requisitos.value).forEach(cat => {
+                    requisitos.value[cat].forEach(req => {
+                        totalReqs++;
+                        if (eq.evaluaciones[cat + '::' + req] === 'Cumple') {
+                            fulfilled++;
+                        }
+                    });
+                });
+                return totalReqs > 0 ? Math.round((fulfilled / totalReqs) * 100) : 0;
+            };
+
+            const addGanttActivity = () => {
+                if (newActivity.value.actividad && activeEquipment.value) {
+                    activeEquipment.value.gantt.push({
+                        id: Date.now(),
+                        ...newActivity.value
+                    });
+                    newActivity.value.actividad = '';
+                    showNotification('Actividad agregada al plan');
+                }
+            };
+
+            const signEquipment = () => {
+                if (activeEquipment.value) {
+                    activeEquipment.value.firmado = true;
+                    activeEquipment.value.firmante = selectedFirmante.value;
+                    activeEquipment.value.fechaFirma = new Date().toISOString().split('T')[0];
+                    showNotification('¡Equipo firmado y liberado con éxito!');
+                }
+            };
+
+            const addUser = () => {
+                if (newUserName.value.trim() && !usuarios.value.includes(newUserName.value.trim())) {
+                    usuarios.value.push(newUserName.value.trim());
+                    newUserName.value = '';
+                    showNotification('Usuario agregado al catálogo');
+                }
+            };
+
+            return {
+                isLoggedIn, currentUser, loginForm, currentTab, toastMessage,
+                selectedZona, selectedProceso, activeEquipment, activeDetailTab,
+                navItems, detailTabs, catalogo, requisitos, usuarios, equipos,
+                firmadosCount, newUserName, selectedFirmante, newActivity,
+                login, logout, showNotification, selectZonaFromDashboard, updateFirstProceso,
+                openEquipment, getCompliancePercentage, addGanttActivity, signEquipment, addUser
+            };
+        }
+    }).mount('#app');
+
+    setTimeout(() => { lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>
