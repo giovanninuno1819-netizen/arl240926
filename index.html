@@ -445,12 +445,14 @@
 </div>
 
 <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxNgQ8Ja2JPuQh5L3B51xghgu4Tf4krpBgXi86XT7UTgqI8wRSUIVh0k6tPl6G-xrLN/exec";
+
     const { createApp, ref, computed } = Vue;
 
     createApp({
         setup() {
             const isLoggedIn = ref(false);
-            const currentUser = ref('Alberto Giovanni Bañales Nuño');
+            const currentUser = ref('Giovanni');
             const loginForm = ref({ user: '', pass: '' });
             const currentTab = ref('Inicio');
             const toastMessage = ref('');
@@ -461,8 +463,8 @@
             const activeDetailTab = ref('Características');
             
             const newUserName = ref('');
-            const selectedFirmante = ref('Alberto Giovanni Bañales Nuño');
-            const newActivity = ref({ actividad: '', inicio: '', fin: '', responsable: 'Alberto Giovanni Bañales Nuño', estado: 'Pendiente' });
+            const selectedFirmante = ref('Giovanni');
+            const newActivity = ref({ actividad: '', inicio: '', fin: '', responsable: 'Giovanni', estado: 'Pendiente' });
 
             const navItems = [
                 { id: 'Inicio', label: 'Inicio', icon: 'home' },
@@ -492,88 +494,104 @@
             const requisitos = ref({
                 "Características": ["Marca", "Modelo", "Capacidad", "Servicios", "Dimensiones"],
                 "Certificados": ["Certificado de materiales", "Certificado de calibración", "Certificados del constructor"],
-                "Documentación": ["IQ", "OQ", "Manual de instalación", "Manual de operación", "Manual de pantallas", "Manual de mantenimiento"],
-                "Ubicación": ["Plano / ubicación del equipo"]
+                "Documentación": ["Manual de operación", "Diagrama P&ID", "Planos eléctricos", "Lista de refacciones"],
+                "Pruebas FAT / SAT": ["Protocolo FAT aprobado", "Protocolo SAT aprobado", "Pruebas de integridad", "Pruebas de desempeño"]
             });
 
             const usuarios = ref([
-                "Alberto Giovanni Bañales Nuño",
-                "Ingeniería",
-                "Calidad",
-                "Producción",
-                "Mantenimiento"
+                'Giovanni',
+                'Ingeniería de Planta',
+                'Aseguramiento de Calidad',
+                'Validación y Metrología',
+                'Gerencia de Operaciones'
             ]);
 
             const equipos = ref([]);
 
-            Object.keys(catalogo.value).forEach(zona => {
-                Object.keys(catalogo.value[zona]).forEach(proceso => {
-                    catalogo.value[zona][proceso].forEach(eqName => {
-                        equipos.value.push({
-                            id: Math.random(),
-                            zona: zona,
-                            proceso: proceso,
-                            equipo: eqName,
-                            marca: '',
-                            modelo: '',
-                            capacidad: '',
-                            dimensiones: '',
-                            servicios: '',
-                            ubicacion: '',
-                            evaluaciones: {},
-                            gantt: [
-                                { id: 1, actividad: 'Instalación mecánica', inicio: '2026-06-01', fin: '2026-06-05', responsable: 'Ingeniería', estado: 'Pendiente' }
-                            ],
-                            firmado: false,
-                            firmante: '',
-                            fechaFirma: ''
-                        });
-                    });
-                });
+            // Función para sincronizar y cargar los equipos desde Google Sheets de forma remota
+            const cargarEquiposRemotos = async () => {
+                try {
+                    let response = await fetch(`${API_URL}?action=obtener`);
+                    let datos = await response.json();
+                    if (datos && datos.length > 0) {
+                        equipos.value = datos;
+                        showNotification('Datos sincronizados desde Google Sheets');
+                    }
+                } catch (error) {
+                    console.error("Error al conectar con Google Sheets:", error);
+                }
+            };
+
+            // Cargar datos al iniciar
+            cargarEquiposRemotos();
+
+            const firmadosCount = computed(() => {
+                return equipos.value.filter(e => e.firmado).length;
             });
 
-            const firmadosCount = computed(() => equipos.value.filter(e => e.firmado).length);
-
             const login = () => {
-                if (loginForm.value.user && loginForm.value.pass) {
-                    isLoggedIn.value = true;
-                    showNotification('Sesión iniciada correctamente');
-                }
+                isLoggedIn.value = true;
+                showNotification('Sesión iniciada correctamente');
             };
 
             const logout = () => {
                 isLoggedIn.value = false;
-                loginForm.value = { user: '', pass: '' };
+                loginForm.value.user = '';
+                loginForm.value.pass = '';
             };
 
             const showNotification = (msg) => {
                 toastMessage.value = msg;
-                setTimeout(() => { toastMessage.value = ''; }, 3000);
+                setTimeout(() => {
+                    toastMessage.value = '';
+                }, 3000);
             };
 
             const selectZonaFromDashboard = (zona) => {
                 selectedZona.value = zona;
-                updateFirstProceso();
+                const procesosKeys = Object.keys(catalogo.value[zona]);
+                if (procesosKeys.length > 0) {
+                    selectedProceso.value = procesosKeys[0];
+                }
                 currentTab.value = 'Equipos';
             };
 
             const updateFirstProceso = () => {
-                const procesos = Object.keys(catalogo.value[selectedZona.value] || {});
-                if (procesos.length > 0) {
-                    selectedProceso.value = procesos[0];
+                const procesosKeys = Object.keys(catalogo.value[selectedZona.value]);
+                if (procesosKeys.length > 0) {
+                    selectedProceso.value = procesosKeys[0];
                 }
             };
 
             const openEquipment = (zona, proceso, eqName) => {
                 let found = equipos.value.find(e => e.zona === zona && e.proceso === proceso && e.equipo === eqName);
-                if (found) {
-                    activeEquipment.value = found;
-                    currentTab.value = 'Detalle';
-                    activeDetailTab.value = 'Características';
+                if (!found) {
+                    found = {
+                        id: zona + '-' + proceso + '-' + eqName,
+                        zona: zona,
+                        proceso: proceso,
+                        equipo: eqName,
+                        marca: '',
+                        modelo: '',
+                        capacidad: '',
+                        dimensiones: '',
+                        servicios: '',
+                        ubicacion: '',
+                        evaluaciones: {},
+                        firmado: false,
+                        firmante: '',
+                        fechaFirma: '',
+                        gantt: []
+                    };
+                    equipos.value.push(found);
                 }
+                activeEquipment.value = found;
+                currentTab.value = 'Detalle';
+                activeDetailTab.value = 'Características';
             };
 
             const getCompliancePercentage = (eq) => {
+                if (!eq || !eq.evaluaciones) return 0;
                 let totalReqs = 0;
                 let fulfilled = 0;
                 Object.keys(requisitos.value).forEach(cat => {
@@ -589,6 +607,7 @@
 
             const addGanttActivity = () => {
                 if (newActivity.value.actividad && activeEquipment.value) {
+                    if (!activeEquipment.value.gantt) activeEquipment.value.gantt = [];
                     activeEquipment.value.gantt.push({
                         id: Date.now(),
                         ...newActivity.value
